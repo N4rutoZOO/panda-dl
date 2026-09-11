@@ -19,8 +19,8 @@ core.EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="
 core.WORKER_POLL = max(0.4, min(float(os.getenv("PANDA_YT_WORKER_POLL", "0.5")), 5.0))
 core.VERSION = "4.0-sync-v2"
 
-install_sync_v2_patch(playlist_sync_core)
 sync_storage_router = install_sync_persistence(playlist_sync_core)
+install_sync_v2_patch(playlist_sync_core)
 sync_router = playlist_sync_core.router
 
 app = core.app
