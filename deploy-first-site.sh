@@ -12,8 +12,8 @@ WORKER_SECRET="${PANDA_WORKER_SECRET:-panda-dl-worker-token}"
 cd "$(dirname "$0")"
 chmod +x setup-worker.sh
 
-# Refresh the authenticated private worker. This is the only YouTube auth path used
-# by the first site: persistent Chromium profile + yt-dlp (+ gallery-dl for photos).
+# Keep the VM worker: this is the proven path that can read the persistent
+# Chromium profile and run yt-dlp with the user's own authenticated session.
 ./setup-worker.sh
 
 gcloud config set project "$PROJECT_ID" >/dev/null
@@ -28,32 +28,15 @@ gcloud secrets add-iam-policy-binding "$WORKER_SECRET" \
   --role="roles/secretmanager.secretAccessor" \
   --quiet >/dev/null
 
-SECRET_MAP="PANDA_YT_WORKER_TOKEN=${WORKER_SECRET}:latest"
-AUTH_REQUIRED=0
-
-# Google login is enabled automatically when its three secrets already exist.
-GOOGLE_CLIENT_SECRET="panda-dl-google-client-id"
-GOOGLE_EMAILS_SECRET="panda-dl-allowed-emails"
-SESSION_SECRET="panda-dl-session-secret"
-if gcloud secrets describe "$GOOGLE_CLIENT_SECRET" >/dev/null 2>&1 \
-  && gcloud secrets describe "$GOOGLE_EMAILS_SECRET" >/dev/null 2>&1 \
-  && gcloud secrets describe "$SESSION_SECRET" >/dev/null 2>&1; then
-  for secret in "$GOOGLE_CLIENT_SECRET" "$GOOGLE_EMAILS_SECRET" "$SESSION_SECRET"; do
-    gcloud secrets add-iam-policy-binding "$secret" \
-      --member="serviceAccount:${RUNTIME_SA}" \
-      --role="roles/secretmanager.secretAccessor" \
-      --quiet >/dev/null
-  done
-  SECRET_MAP+=",PANDA_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_SECRET}:latest,PANDA_ALLOWED_GOOGLE_EMAILS=${GOOGLE_EMAILS_SECRET}:latest,PANDA_SESSION_SECRET=${SESSION_SECRET}:latest"
-  AUTH_REQUIRED=1
-fi
-
 echo "PANDA DOWNLOAD -> worker privé http://${WORKER_IP}:${WORKER_PORT}"
-echo "Ancien secret youtube-cookies: désactivé pour ce service"
+echo "Auth YouTube legacy youtube-cookies: SUPPRIMEE"
+echo "Auth YouTube active: Chromium worker + yt-dlp"
 
-# --set-env-vars / --set-secrets replace the legacy configuration instead of preserving
-# YTDLP_COOKIES_FILE or the old youtube-cookies mount. YouTube auth now falls through
-# the private worker Chromium session.
+# IMPORTANT:
+# --set-env-vars and --set-secrets REPLACE the old service configuration.
+# This removes YTDLP_COOKIES_FILE and the old youtube-cookies secret mount.
+# The first site is intentionally left without mandatory Google login for now:
+# the priority is that downloads work.
 gcloud run deploy "$SERVICE" \
   --source . \
   --region "$REGION" \
@@ -70,21 +53,38 @@ gcloud run deploy "$SERVICE" \
   --network=default \
   --subnet=default \
   --vpc-egress=private-ranges-only \
-  --set-env-vars="PANDA_YT_WORKER_URL=http://${WORKER_IP}:${WORKER_PORT},PANDA_AUTH_REQUIRED=${AUTH_REQUIRED},PANDA_COOKIE_SECURE=1,PANDA_PLAYLIST_LIMIT=100,PANDA_YT_WORKER_POLL=0.8" \
-  --set-secrets="$SECRET_MAP"
+  --set-env-vars="PANDA_YT_WORKER_URL=http://${WORKER_IP}:${WORKER_PORT},PANDA_AUTH_REQUIRED=0,PANDA_COOKIE_SECURE=1,PANDA_PLAYLIST_LIMIT=100,PANDA_YT_WORKER_POLL=0.8" \
+  --set-secrets="PANDA_YT_WORKER_TOKEN=${WORKER_SECRET}:latest"
+
+# Do not leave traffic on an old V6 revision that still contains the
+# 'Mets à jour le secret youtube-cookies' message.
+gcloud run services update-traffic "$SERVICE" \
+  --region "$REGION" \
+  --to-latest \
+  --quiet >/dev/null
 
 URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
+LATEST="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.latestReadyRevisionName)')"
+
 echo
 echo "===================================="
-echo "PANDA DOWNLOAD · PANDA DL ENGINE"
+echo "PANDA DOWNLOAD · DIRECT WORKER"
 echo "$URL"
+echo "Revision: $LATEST"
 echo "===================================="
+
 HEALTH="$(curl -fsS "$URL/health")"
 echo "$HEALTH"
 
-if echo "$HEALTH" | grep -q '2.1-full-social'; then
-  echo "OK: ancien moteur youtube-cookies remplacé."
-else
-  echo "ATTENTION: la nouvelle révision ne semble pas active."
+if ! echo "$HEALTH" | grep -q '2.1-full-social'; then
+  echo "ERREUR: l'ancien code est encore servi; la nouvelle revision n'est pas active."
   exit 1
 fi
+if ! echo "$HEALTH" | grep -q '"worker_configured":true'; then
+  echo "ERREUR: le worker yt-dlp n'est pas configure dans Cloud Run."
+  exit 1
+fi
+
+echo
+echo "OK: panda-download utilise maintenant uniquement le worker Chromium + yt-dlp."
+echo "L'ancien message youtube-cookies ne fait plus partie du chemin d'execution actif."
