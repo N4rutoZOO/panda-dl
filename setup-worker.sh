@@ -40,12 +40,13 @@ PANDA_WORKER_JOB_TTL=3600
 PANDA_WORKER_JOBS=1
 PANDA_WORKER_FRAGMENTS=2
 PANDA_YTDLP_BIN=/opt/panda-dl-worker/venv/bin/yt-dlp
+PANDA_GALLERYDL_BIN=/opt/panda-dl-worker/venv/bin/gallery-dl
 PATH=/opt/panda-dl-worker/venv/bin:/home/$WORKER_USER/.deno/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EOF
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=PANDA DL yt-dlp worker
+Description=PANDA DL media worker
 After=network-online.target
 Wants=network-online.target
 
@@ -84,13 +85,14 @@ if [[ ! -x /opt/panda-dl-worker/venv/bin/python ]]; then
   python3 -m venv /opt/panda-dl-worker/venv
 fi
 /opt/panda-dl-worker/venv/bin/pip install -q --upgrade pip
-/opt/panda-dl-worker/venv/bin/pip install -q 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.32,<1' 'yt-dlp[default]>=2026.07.04,<2027'
+/opt/panda-dl-worker/venv/bin/pip install -q 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.32,<1' 'yt-dlp[default]>=2026.07.04,<2027' 'gallery-dl>=1.30,<2'
 sudo mv /tmp/panda-dl-worker.env /etc/panda-dl-worker.env
 sudo mv /tmp/panda-dl-worker.service /etc/systemd/system/panda-dl-worker.service
 sudo chown root:root /etc/panda-dl-worker.env /etc/systemd/system/panda-dl-worker.service
 sudo chmod 600 /etc/panda-dl-worker.env
 sudo systemctl daemon-reload
 sudo systemctl enable --now panda-dl-worker
+sudo systemctl restart panda-dl-worker
 sleep 4
 curl -fsS http://127.0.0.1:$PORT/health
 "
@@ -110,4 +112,5 @@ echo "VM: $INSTANCE"
 echo "Internal: http://$IP:$PORT"
 echo "Secret: $SECRET"
 echo "Profile: /home/$WORKER_USER/chrome-profile"
+echo "Engines: yt-dlp + gallery-dl + ffmpeg"
 echo "===================================="
