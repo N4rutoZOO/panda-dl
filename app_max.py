@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 import app_full as core
 import playlist_sync as playlist_sync_core
 from sync_persistence import install as install_sync_persistence
+from sync_v2_patch import install as install_sync_v2_patch
 
 JOB_WORKERS = max(1, min(int(os.getenv("PANDA_JOB_WORKERS", "2")), 4))
 
@@ -18,6 +19,7 @@ core.EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="
 core.WORKER_POLL = max(0.4, min(float(os.getenv("PANDA_YT_WORKER_POLL", "0.5")), 5.0))
 core.VERSION = "4.0-sync-v2"
 
+install_sync_v2_patch(playlist_sync_core)
 sync_storage_router = install_sync_persistence(playlist_sync_core)
 sync_router = playlist_sync_core.router
 
