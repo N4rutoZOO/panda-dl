@@ -2,79 +2,90 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Dingo-dl Sync</title>
 <style>
-:root{--bg:#090d16;--panel:#111722;--panel2:#171d29;--border:#2b3445;--text:#f0f2fa;--muted:#848da1;--blue:#4169ff;--violet:#8154ff;--pink:#d949e9;--green:#39ddb0;--red:#ff5466}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -15%,#20273b 0,transparent 35%),var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.app{max-width:1180px;margin:auto;padding:22px}.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.brand{font-weight:900;font-size:22px;letter-spacing:1px}.back{color:var(--muted);text-decoration:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{background:linear-gradient(180deg,#111824,#0c111a);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 14px 34px rgba(0,0,0,.25)}.title{font-weight:800;margin-bottom:12px}.provider{display:flex;align-items:center;justify-content:space-between;padding:13px;border:1px solid #2b3548;border-radius:12px;background:#141b28;margin-bottom:9px}.pname{display:flex;gap:10px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;background:#5d677a}.dot.on{background:var(--green);box-shadow:0 0 16px rgba(57,221,176,.4)}button,select,input{font:inherit}.btn{border:0;border-radius:10px;padding:10px 14px;color:white;font-weight:700;background:linear-gradient(120deg,#296cff,#8a49ff,#d94adc);cursor:pointer}.btn.secondary{background:#171f2e;border:1px solid #334058}.btn:disabled{opacity:.45;cursor:not-allowed}.field{width:100%;height:44px;background:#131a27;color:white;border:1px solid #364257;border-radius:10px;padding:0 12px;outline:none;margin-bottom:10px}.field:focus{border-color:#765bff}.flow{margin-top:14px}.progress{height:9px;background:#192131;border-radius:999px;overflow:hidden;margin:12px 0}.bar{height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--violet),var(--pink));transition:width .25s}.stats{display:flex;gap:10px;flex-wrap:wrap}.chip{background:#151c2a;border:1px solid #343f54;border-radius:8px;padding:6px 10px;color:#c9cfdb}.report{margin-top:14px;max-height:420px;overflow:auto;border:1px solid #20293a;border-radius:12px}.row{display:grid;grid-template-columns:42px 1fr 90px;gap:10px;padding:10px 12px;border-bottom:1px solid #1b2433;align-items:center}.score{font-variant-numeric:tabular-nums;color:var(--muted)}.ok{color:var(--green)}.bad{color:var(--red)}.hint{color:var(--muted);font-size:12px;margin-top:8px}@media(max-width:800px){.grid{grid-template-columns:1fr}.app{padding:14px}.head{align-items:flex-start;gap:12px}.row{grid-template-columns:34px 1fr 66px}}
+:root{--bg:#07090e;--panel:#0e131d;--panel2:#131a26;--line:#273043;--text:#f4f6fb;--muted:#8790a3;--purple:#8157ff;--violet:#b35cff;--orange:#ff8a3d;--green:#39ddb0;--red:#ff586b;--blue:#5f84ff;--shadow:0 18px 45px rgba(0,0,0,.35)}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;color:var(--text);font:14px/1.45 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 20% -10%,rgba(129,87,255,.2),transparent 30%),radial-gradient(circle at 90% 5%,rgba(255,138,61,.12),transparent 24%),var(--bg);min-height:100vh}.app{max-width:1240px;margin:auto;padding:18px 18px 40px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px}.brand{display:flex;align-items:center;gap:11px;font-weight:950;font-size:21px;letter-spacing:.5px}.mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--orange),var(--purple));box-shadow:0 0 28px rgba(129,87,255,.25);display:grid;place-items:center;font-size:17px}.nav{display:flex;gap:8px;flex-wrap:wrap}.nav a,.ghost{color:#c8cede;text-decoration:none;border:1px solid var(--line);background:#101622;border-radius:10px;padding:9px 12px}.hero{border:1px solid var(--line);background:linear-gradient(180deg,rgba(19,26,38,.92),rgba(10,14,21,.96));border-radius:18px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px;position:relative;overflow:hidden}.hero:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--orange),var(--purple),var(--violet),var(--blue))}.hero h1{font-size:28px;margin:0 0 5px}.hero p{margin:0;color:var(--muted);max-width:780px}.health{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid #313b50;background:#111824;border-radius:999px;padding:7px 10px;color:#cdd3df;font-size:12px}.lamp{width:8px;height:8px;border-radius:50%;background:#636b7c}.lamp.ok{background:var(--green);box-shadow:0 0 12px rgba(57,221,176,.55)}.lamp.warn{background:var(--orange)}.grid{display:grid;grid-template-columns:1fr 1.25fr;gap:14px}.card{background:linear-gradient(180deg,#101722,#0b1018);border:1px solid var(--line);border-radius:16px;padding:15px;box-shadow:var(--shadow)}.card h2{font-size:14px;margin:0 0 12px;letter-spacing:.15px}.provider{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid #283348;background:#121a26;border-radius:13px;padding:12px;margin-bottom:9px}.providerMain{display:flex;align-items:center;gap:10px}.picon{width:34px;height:34px;border-radius:10px;background:#1a2231;border:1px solid #2c3850;display:grid;place-items:center;font-weight:900}.meta{color:var(--muted);font-size:12px;margin-top:2px}.btn{appearance:none;border:0;border-radius:10px;padding:10px 13px;color:#fff;font-weight:800;cursor:pointer;background:linear-gradient(125deg,var(--orange),var(--purple));box-shadow:0 8px 24px rgba(129,87,255,.15)}.btn.secondary{background:#171f2d;border:1px solid #354157;box-shadow:none}.btn.small{padding:8px 10px;font-size:12px}.btn:disabled{opacity:.42;cursor:not-allowed}.transferGrid{display:grid;grid-template-columns:1fr 42px 1fr;gap:8px;align-items:start}.field{width:100%;height:44px;border-radius:10px;border:1px solid #344158;background:#121925;color:#f6f8fb;padding:0 11px;outline:none}.field:focus{border-color:#7a63ff;box-shadow:0 0 0 3px rgba(122,99,255,.08)}.swap{width:42px;height:44px;border-radius:10px;border:1px solid #344158;background:#151d2a;color:#fff;cursor:pointer}.row2{display:grid;grid-template-columns:1fr 140px;gap:8px;margin-top:8px}.actions{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}.hint{font-size:12px;color:var(--muted)}.statusbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.stat{border:1px solid #2e394d;background:#121925;border-radius:10px;padding:8px 10px;color:#cbd2df}.progress{height:10px;border-radius:999px;background:#181f2d;overflow:hidden}.bar{height:100%;width:0;background:linear-gradient(90deg,var(--orange),var(--purple),var(--violet));transition:width .25s}.reportTools{display:flex;gap:8px;margin-top:12px}.search{flex:1}.report{margin-top:10px;border:1px solid #222d3e;border-radius:12px;max-height:430px;overflow:auto}.r{display:grid;grid-template-columns:38px minmax(0,1fr) 80px;gap:9px;align-items:center;padding:10px 11px;border-bottom:1px solid #1d2635}.r:last-child{border-bottom:0}.titleline{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.oktxt{color:var(--green)}.badtxt{color:var(--red)}.score{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}.history{margin-top:14px}.hist{display:grid;grid-template-columns:120px 1fr 100px 90px;gap:10px;align-items:center;padding:10px 11px;border-bottom:1px solid #1d2635}.hist:last-child{border-bottom:0}.roadmap{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.soon{border:1px dashed #303b50;border-radius:11px;padding:10px;color:#98a1b3;background:#0e141f}.toast{position:fixed;right:16px;bottom:16px;max-width:360px;background:#131a26;border:1px solid #344158;border-radius:12px;padding:11px 13px;box-shadow:var(--shadow);display:none;z-index:20}.muted{color:var(--muted)}@media(max-width:900px){.grid{grid-template-columns:1fr}.roadmap{grid-template-columns:1fr 1fr}.hist{grid-template-columns:90px 1fr 70px}.hist .date{display:none}}@media(max-width:640px){.app{padding:12px 12px 28px}.top{align-items:flex-start}.nav{justify-content:flex-end}.hero h1{font-size:23px}.transferGrid{grid-template-columns:1fr}.swap{width:100%}.row2{grid-template-columns:1fr}.roadmap{grid-template-columns:1fr}.r{grid-template-columns:30px 1fr 58px}.hist{grid-template-columns:1fr 72px}.hist .route{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="head">
-    <div class="brand">Dingo-dl <span style="color:#8a61ff">SYNC</span></div>
-    <a class="back" href="/">← Downloader</a>
-  </div>
+  <header class="top">
+    <div class="brand"><div class="mark">D</div><div>Dingo-dl <span style="color:var(--purple)">SYNC</span></div></div>
+    <nav class="nav"><a href="/">Downloader</a><a href="/sync">Sync</a><a href="#history">Historique</a></nav>
+  </header>
 
-  <div class="grid">
-    <section class="card">
-      <div class="title">1. Connexions</div>
-      <div id="providers"></div>
-      <div class="hint">Les connexions OAuth restent séparées du moteur yt-dlp/gallery-dl.</div>
-    </section>
-
-    <section class="card">
-      <div class="title">2. Transfert</div>
-      <select id="source" class="field">
-        <option value="">Source…</option>
-        <option value="spotify">Spotify</option>
-        <option value="youtube">YouTube / YouTube Music</option>
-      </select>
-      <select id="playlist" class="field" disabled><option>Playlist source…</option></select>
-      <select id="destination" class="field">
-        <option value="">Destination…</option>
-        <option value="spotify">Spotify</option>
-        <option value="youtube">YouTube / YouTube Music</option>
-      </select>
-      <input id="name" class="field" placeholder="Nom de la playlist destination (optionnel)">
-      <button id="transfer" class="btn" disabled>TRANSFÉRER</button>
-      <div class="hint">Matching: ISRC quand disponible, sinon titre + artiste + durée.</div>
-    </section>
-  </div>
-
-  <section class="card flow">
-    <div class="title">3. Rapport</div>
-    <div id="state" class="hint">Aucun transfert en cours.</div>
-    <div class="progress"><div id="bar" class="bar"></div></div>
-    <div class="stats">
-      <div class="chip">Total <b id="total">0</b></div>
-      <div class="chip">Matchés <b id="matched">0</b></div>
-      <div class="chip">Introuvables <b id="unmatched">0</b></div>
+  <section class="hero">
+    <h1>Playlist Transfer Console</h1>
+    <p>Connexion OAuth, transfert, matching, cache et historique dans une interface unique. Le moteur downloader reste séparé du moteur Sync.</p>
+    <div class="health">
+      <span class="pill"><span id="apiLamp" class="lamp"></span>API Sync</span>
+      <span class="pill"><span id="dbLamp" class="lamp"></span>Firestore</span>
+      <span class="pill"><span id="secLamp" class="lamp"></span>Tokens chiffrés</span>
+      <span class="pill">Cache match <b id="cacheTtl">—</b></span>
     </div>
+  </section>
+
+  <main class="grid">
+    <section class="card">
+      <h2>01 · CONNEXIONS</h2>
+      <div id="providers"><div class="muted">Chargement…</div></div>
+      <div class="roadmap">
+        <div class="soon"><b>Deezer</b><div class="meta">connecteur à venir</div></div>
+        <div class="soon"><b>Apple Music</b><div class="meta">connecteur à venir</div></div>
+        <div class="soon"><b>TIDAL</b><div class="meta">connecteur à venir</div></div>
+        <div class="soon"><b>SoundCloud</b><div class="meta">connecteur à venir</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>02 · TRANSFERT</h2>
+      <div class="transferGrid">
+        <select id="source" class="field"><option value="">Source…</option><option value="spotify">Spotify</option><option value="youtube">YouTube / YouTube Music</option></select>
+        <button id="swap" class="swap" title="Inverser">⇄</button>
+        <select id="destination" class="field"><option value="">Destination…</option><option value="spotify">Spotify</option><option value="youtube">YouTube / YouTube Music</option></select>
+      </div>
+      <select id="playlist" class="field" style="margin-top:8px" disabled><option value="">Playlist source…</option></select>
+      <div class="row2">
+        <input id="name" class="field" placeholder="Nom de la playlist destination">
+        <input id="limit" class="field" type="number" min="1" max="2000" value="500" title="Nombre maximum de titres">
+      </div>
+      <div class="actions"><button id="transfer" class="btn" disabled>TRANSFÉRER</button><button id="refresh" class="btn secondary">ACTUALISER</button><span id="transferHint" class="hint">Connecte les deux plateformes puis choisis une playlist.</span></div>
+    </section>
+  </main>
+
+  <section class="card" style="margin-top:14px">
+    <h2>03 · RAPPORT TEMPS RÉEL</h2>
+    <div id="state" class="hint">Aucun transfert en cours.</div>
+    <div class="progress" style="margin-top:10px"><div id="bar" class="bar"></div></div>
+    <div class="statusbar"><div class="stat">Total <b id="total">0</b></div><div class="stat">Matchés <b id="matched">0</b></div><div class="stat">Introuvables <b id="unmatched">0</b></div><div class="stat">Progression <b id="pct">0%</b></div></div>
+    <div class="reportTools"><input id="reportSearch" class="field search" placeholder="Filtrer le rapport…"><button id="clearReport" class="btn secondary small">EFFACER</button></div>
     <div id="report" class="report" style="display:none"></div>
   </section>
+
+  <section id="history" class="card history">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 style="margin:0">04 · HISTORIQUE</h2><button id="reloadHistory" class="btn secondary small">RAFRAÎCHIR</button></div>
+    <div id="historyList" class="report" style="max-height:330px"><div class="muted" style="padding:12px">Aucun historique chargé.</div></div>
+  </section>
 </div>
-
+<div id="toast" class="toast"></div>
 <script>
-const $=s=>document.querySelector(s);
-const providers=$("#providers"),source=$("#source"),playlist=$("#playlist"),destination=$("#destination"),transfer=$("#transfer"),state=$("#state"),bar=$("#bar"),report=$("#report");
-let statusMap={};
-
-async function api(url,options={}){const r=await fetch(url,{...options,headers:{"Accept":"application/json",...(options.headers||{})}});const raw=await r.text();let data={};try{data=raw?JSON.parse(raw):{}}catch{throw new Error("Réponse API invalide")}if(!r.ok)throw new Error(data.detail||data.error||`Erreur ${r.status}`);return data}
-
-async function loadProviders(){const data=await api("/api/sync/providers");statusMap={};providers.innerHTML="";data.providers.forEach(p=>{statusMap[p.id]=p;const div=document.createElement("div");div.className="provider";div.innerHTML=`<div class="pname"><span class="dot ${p.connected?"on":""}"></span><div><b>${p.name}</b><div class="hint">${p.configured?(p.connected?"Connecté":"Prêt à connecter"):"OAuth non configuré"}</div></div></div>`;const btn=document.createElement("button");btn.className="btn secondary";btn.textContent=p.connected?"Déconnecter":"Connecter";btn.disabled=!p.configured;btn.onclick=async()=>{if(p.connected){await api(`/api/sync/disconnect/${p.id}`,{method:"POST"});await loadProviders();checkReady()}else location.href=`/api/sync/oauth/${p.id}/start`};div.appendChild(btn);providers.appendChild(div)});checkReady()}
-
-function checkReady(){const s=source.value,d=destination.value;transfer.disabled=!(s&&d&&s!==d&&playlist.value&&statusMap[s]?.connected&&statusMap[d]?.connected)}
-
-source.onchange=async()=>{playlist.disabled=true;playlist.innerHTML="<option>Chargement…</option>";if(!source.value){playlist.innerHTML="<option>Playlist source…</option>";checkReady();return}try{const data=await api(`/api/sync/playlists/${source.value}`);playlist.innerHTML='<option value="">Playlist source…</option>';data.playlists.forEach(p=>{const opt=document.createElement("option");opt.value=p.id;opt.textContent=`${p.name} (${p.count||0})`;playlist.appendChild(opt)});playlist.disabled=false}catch(e){playlist.innerHTML=`<option>${e.message}</option>`}checkReady()};playlist.onchange=checkReady;destination.onchange=checkReady;
-
-transfer.onclick=async()=>{try{transfer.disabled=true;report.style.display="none";report.innerHTML="";state.textContent="Création du job…";bar.style.width="2%";const data=await api("/api/sync/transfer",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:source.value,destination:destination.value,playlist_id:playlist.value,destination_name:$("#name").value.trim()||null,max_tracks:500})});poll(data.job_id)}catch(e){state.textContent=e.message;transfer.disabled=false}};
-
-async function poll(id){try{const j=await api(`/api/sync/jobs/${id}`);bar.style.width=`${j.progress||0}%`;state.textContent=`${j.stage||j.status} · ${j.progress||0}%`;$("#total").textContent=j.total||0;$("#matched").textContent=j.matched||0;$("#unmatched").textContent=j.unmatched||0;if(j.status==="ready"){renderReport(j.report||[]);transfer.disabled=false;return}if(j.status==="error"){state.textContent=j.error||j.message||"Erreur";transfer.disabled=false;return}setTimeout(()=>poll(id),900)}catch(e){state.textContent=e.message;transfer.disabled=false}}
-
+const $=s=>document.querySelector(s);let statusMap={},lastReport=[];
+function toast(msg){const t=$("#toast");t.textContent=msg;t.style.display="block";clearTimeout(window.__tt);window.__tt=setTimeout(()=>t.style.display="none",3600)}
+async function api(url,options={}){const r=await fetch(url,{...options,headers:{Accept:"application/json",...(options.headers||{})}});const raw=await r.text();let data={};try{data=raw?JSON.parse(raw):{}}catch{throw new Error(`Réponse invalide (${r.status})`)}if(!r.ok)throw new Error(data.detail||data.error||`Erreur ${r.status}`);return data}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function renderReport(rows){report.style.display="block";report.innerHTML=rows.map((r,i)=>`<div class="row"><div>${i+1}</div><div><b>${esc(r.source?.title)}</b><div class="hint">${esc(r.source?.artist)} → <span class="${r.matched?"ok":"bad"}">${r.matched?esc(r.destination?.title):"Introuvable"}</span></div></div><div class="score">${Math.round((r.score||0)*100)}%</div></div>`).join("");state.textContent="Transfert terminé"}
-loadProviders();
+async function loadStorage(){try{const s=await api("/api/sync/storage");$("#apiLamp").className="lamp ok";$("#dbLamp").className="lamp "+(s.firestore_ready?"ok":"warn");$("#secLamp").className="lamp "+(s.secure_token_storage?"ok":"warn");$("#cacheTtl").textContent=Math.round((s.match_cache_ttl_seconds||0)/86400)+"j"}catch(e){$("#apiLamp").className="lamp warn";toast(e.message)}}
+async function loadProviders(){try{const d=await api("/api/sync/providers");statusMap={};$("#providers").innerHTML="";d.providers.forEach(p=>{statusMap[p.id]=p;const el=document.createElement("div");el.className="provider";el.innerHTML=`<div class="providerMain"><div class="picon">${p.id==="spotify"?"S":"Y"}</div><div><b>${esc(p.name)}</b><div class="meta">${p.configured?(p.connected?"Connecté":"Prêt à connecter"):"OAuth non configuré"}</div></div></div>`;const b=document.createElement("button");b.className="btn secondary small";b.textContent=p.connected?"Déconnecter":"Connecter";b.disabled=!p.configured;b.onclick=async()=>{if(p.connected){await api(`/api/sync/disconnect/${p.id}`,{method:"POST"});await loadProviders();checkReady()}else location.href=`/api/sync/oauth/${p.id}/start`};el.appendChild(b);$("#providers").appendChild(el)});$("#apiLamp").className="lamp ok";checkReady()}catch(e){$("#providers").innerHTML=`<div class="badtxt">${esc(e.message)}</div>`}}
+function checkReady(){const s=$("#source").value,d=$("#destination").value,p=$("#playlist").value;const connected=!!(statusMap[s]?.connected&&statusMap[d]?.connected);$("#transfer").disabled=!(s&&d&&s!==d&&p&&connected);$("#transferHint").textContent=!s||!d?"Choisis source et destination.":s===d?"La source et la destination doivent être différentes.":!connected?"Connecte les deux plateformes.":!p?"Choisis une playlist source.":"Prêt à transférer."}
+async function loadPlaylists(){const s=$("#source").value;const pl=$("#playlist");pl.disabled=true;pl.innerHTML='<option value="">Chargement…</option>';if(!s){pl.innerHTML='<option value="">Playlist source…</option>';checkReady();return}try{const d=await api(`/api/sync/playlists/${s}`);pl.innerHTML='<option value="">Playlist source…</option>';d.playlists.forEach(p=>{const o=document.createElement("option");o.value=p.id;o.textContent=`${p.name||"Sans nom"} (${p.count||0})`;pl.appendChild(o)});pl.disabled=false}catch(e){pl.innerHTML=`<option value="">${esc(e.message)}</option>`;toast(e.message)}checkReady()}
+function setProgress(j){const p=Math.max(0,Math.min(100,j.progress||0));$("#bar").style.width=p+"%";$("#pct").textContent=p+"%";$("#state").textContent=`${j.stage||j.status||"…"} · ${p}%`;$("#total").textContent=j.total||0;$("#matched").textContent=j.matched||0;$("#unmatched").textContent=j.unmatched||0}
+async function startTransfer(){try{$("#transfer").disabled=true;$("#report").style.display="none";lastReport=[];setProgress({progress:2,stage:"Création du job"});const body={source:$("#source").value,destination:$("#destination").value,playlist_id:$("#playlist").value,destination_name:$("#name").value.trim()||null,max_tracks:Math.max(1,Math.min(2000,Number($("#limit").value)||500))};const d=await api("/api/sync/transfer",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});poll(d.job_id)}catch(e){$("#state").textContent=e.message;toast(e.message);checkReady()}}
+async function poll(id){try{const j=await api(`/api/sync/jobs/${id}`);setProgress(j);if(j.status==="ready"){lastReport=j.report||[];renderReport();toast("Transfert terminé");checkReady();loadHistory();return}if(j.status==="error"){throw new Error(j.error||j.message||"Erreur de transfert")}setTimeout(()=>poll(id),900)}catch(e){$("#state").textContent=e.message;toast(e.message);checkReady()}}
+function renderReport(){const q=$("#reportSearch").value.trim().toLowerCase();const rows=lastReport.filter(x=>!q||`${x.source?.title||""} ${x.source?.artist||""} ${x.destination?.title||""}`.toLowerCase().includes(q));const box=$("#report");box.style.display=lastReport.length?"block":"none";box.innerHTML=rows.map((r,i)=>`<div class="r"><div>${i+1}</div><div class="titleline"><b>${esc(r.source?.title)}</b><div class="meta">${esc(r.source?.artist)} → <span class="${r.matched?"oktxt":"badtxt"}">${r.matched?esc(r.destination?.title):"Introuvable"}</span></div></div><div class="score">${Math.round((r.score||0)*100)}%</div></div>`).join("")||'<div class="muted" style="padding:12px">Aucun résultat.</div>'}
+async function loadHistory(){try{const d=await api("/api/sync/history?limit=30");const rows=d.history||[];$("#historyList").innerHTML=rows.length?rows.map(h=>`<div class="hist"><div class="route"><b>${esc(h.source||"?")}</b> → <b>${esc(h.destination||"?")}</b></div><div><span class="${h.status==="ready"?"oktxt":"badtxt"}">${esc(h.status||"?")}</span><div class="meta">${h.matched||0}/${h.total||0} matchés</div></div><div class="date meta">${h.finished_at?new Date(h.finished_at*1000).toLocaleString():"—"}</div><div class="score">${h.unmatched||0} ratés</div></div>`).join(""):'<div class="muted" style="padding:12px">Aucun transfert enregistré.</div>'}catch(e){$("#historyList").innerHTML=`<div class="badtxt" style="padding:12px">${esc(e.message)}</div>`}}
+$("#source").onchange=loadPlaylists;$("#destination").onchange=checkReady;$("#playlist").onchange=checkReady;$("#transfer").onclick=startTransfer;$("#refresh").onclick=()=>Promise.all([loadProviders(),loadStorage(),loadPlaylists(),loadHistory()]);$("#swap").onclick=()=>{const a=$("#source").value,b=$("#destination").value;$("#source").value=b;$("#destination").value=a;loadPlaylists();checkReady()};$("#reportSearch").oninput=renderReport;$("#clearReport").onclick=()=>{lastReport=[];$("#report").style.display="none";$("#reportSearch").value=""};$("#reloadHistory").onclick=loadHistory;
+Promise.all([loadStorage(),loadProviders(),loadHistory()]);
 </script>
 </body>
 </html>
