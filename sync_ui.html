@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dingo-dl Sync</title>
+<style>
+:root{--bg:#090d16;--panel:#111722;--panel2:#171d29;--border:#2b3445;--text:#f0f2fa;--muted:#848da1;--blue:#4169ff;--violet:#8154ff;--pink:#d949e9;--green:#39ddb0;--red:#ff5466}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -15%,#20273b 0,transparent 35%),var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.app{max-width:1180px;margin:auto;padding:22px}.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.brand{font-weight:900;font-size:22px;letter-spacing:1px}.back{color:var(--muted);text-decoration:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{background:linear-gradient(180deg,#111824,#0c111a);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 14px 34px rgba(0,0,0,.25)}.title{font-weight:800;margin-bottom:12px}.provider{display:flex;align-items:center;justify-content:space-between;padding:13px;border:1px solid #2b3548;border-radius:12px;background:#141b28;margin-bottom:9px}.pname{display:flex;gap:10px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;background:#5d677a}.dot.on{background:var(--green);box-shadow:0 0 16px rgba(57,221,176,.4)}button,select,input{font:inherit}.btn{border:0;border-radius:10px;padding:10px 14px;color:white;font-weight:700;background:linear-gradient(120deg,#296cff,#8a49ff,#d94adc);cursor:pointer}.btn.secondary{background:#171f2e;border:1px solid #334058}.btn:disabled{opacity:.45;cursor:not-allowed}.field{width:100%;height:44px;background:#131a27;color:white;border:1px solid #364257;border-radius:10px;padding:0 12px;outline:none;margin-bottom:10px}.field:focus{border-color:#765bff}.flow{margin-top:14px}.progress{height:9px;background:#192131;border-radius:999px;overflow:hidden;margin:12px 0}.bar{height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--violet),var(--pink));transition:width .25s}.stats{display:flex;gap:10px;flex-wrap:wrap}.chip{background:#151c2a;border:1px solid #343f54;border-radius:8px;padding:6px 10px;color:#c9cfdb}.report{margin-top:14px;max-height:420px;overflow:auto;border:1px solid #20293a;border-radius:12px}.row{display:grid;grid-template-columns:42px 1fr 90px;gap:10px;padding:10px 12px;border-bottom:1px solid #1b2433;align-items:center}.score{font-variant-numeric:tabular-nums;color:var(--muted)}.ok{color:var(--green)}.bad{color:var(--red)}.hint{color:var(--muted);font-size:12px;margin-top:8px}@media(max-width:800px){.grid{grid-template-columns:1fr}.app{padding:14px}.head{align-items:flex-start;gap:12px}.row{grid-template-columns:34px 1fr 66px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="head">
+    <div class="brand">Dingo-dl <span style="color:#8a61ff">SYNC</span></div>
+    <a class="back" href="/">← Downloader</a>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <div class="title">1. Connexions</div>
+      <div id="providers"></div>
+      <div class="hint">Les connexions OAuth restent séparées du moteur yt-dlp/gallery-dl.</div>
+    </section>
+
+    <section class="card">
+      <div class="title">2. Transfert</div>
+      <select id="source" class="field">
+        <option value="">Source…</option>
+        <option value="spotify">Spotify</option>
+        <option value="youtube">YouTube / YouTube Music</option>
+      </select>
+      <select id="playlist" class="field" disabled><option>Playlist source…</option></select>
+      <select id="destination" class="field">
+        <option value="">Destination…</option>
+        <option value="spotify">Spotify</option>
+        <option value="youtube">YouTube / YouTube Music</option>
+      </select>
+      <input id="name" class="field" placeholder="Nom de la playlist destination (optionnel)">
+      <button id="transfer" class="btn" disabled>TRANSFÉRER</button>
+      <div class="hint">Matching: ISRC quand disponible, sinon titre + artiste + durée.</div>
+    </section>
+  </div>
+
+  <section class="card flow">
+    <div class="title">3. Rapport</div>
+    <div id="state" class="hint">Aucun transfert en cours.</div>
+    <div class="progress"><div id="bar" class="bar"></div></div>
+    <div class="stats">
+      <div class="chip">Total <b id="total">0</b></div>
+      <div class="chip">Matchés <b id="matched">0</b></div>
+      <div class="chip">Introuvables <b id="unmatched">0</b></div>
+    </div>
+    <div id="report" class="report" style="display:none"></div>
+  </section>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const providers=$("#providers"),source=$("#source"),playlist=$("#playlist"),destination=$("#destination"),transfer=$("#transfer"),state=$("#state"),bar=$("#bar"),report=$("#report");
+let statusMap={};
+
+async function api(url,options={}){const r=await fetch(url,{...options,headers:{"Accept":"application/json",...(options.headers||{})}});const raw=await r.text();let data={};try{data=raw?JSON.parse(raw):{}}catch{throw new Error("Réponse API invalide")}if(!r.ok)throw new Error(data.detail||data.error||`Erreur ${r.status}`);return data}
+
+async function loadProviders(){const data=await api("/api/sync/providers");statusMap={};providers.innerHTML="";data.providers.forEach(p=>{statusMap[p.id]=p;const div=document.createElement("div");div.className="provider";div.innerHTML=`<div class="pname"><span class="dot ${p.connected?"on":""}"></span><div><b>${p.name}</b><div class="hint">${p.configured?(p.connected?"Connecté":"Prêt à connecter"):"OAuth non configuré"}</div></div></div>`;const btn=document.createElement("button");btn.className="btn secondary";btn.textContent=p.connected?"Déconnecter":"Connecter";btn.disabled=!p.configured;btn.onclick=async()=>{if(p.connected){await api(`/api/sync/disconnect/${p.id}`,{method:"POST"});await loadProviders();checkReady()}else location.href=`/api/sync/oauth/${p.id}/start`};div.appendChild(btn);providers.appendChild(div)});checkReady()}
+
+function checkReady(){const s=source.value,d=destination.value;transfer.disabled=!(s&&d&&s!==d&&playlist.value&&statusMap[s]?.connected&&statusMap[d]?.connected)}
+
+source.onchange=async()=>{playlist.disabled=true;playlist.innerHTML="<option>Chargement…</option>";if(!source.value){playlist.innerHTML="<option>Playlist source…</option>";checkReady();return}try{const data=await api(`/api/sync/playlists/${source.value}`);playlist.innerHTML='<option value="">Playlist source…</option>';data.playlists.forEach(p=>{const opt=document.createElement("option");opt.value=p.id;opt.textContent=`${p.name} (${p.count||0})`;playlist.appendChild(opt)});playlist.disabled=false}catch(e){playlist.innerHTML=`<option>${e.message}</option>`}checkReady()};playlist.onchange=checkReady;destination.onchange=checkReady;
+
+transfer.onclick=async()=>{try{transfer.disabled=true;report.style.display="none";report.innerHTML="";state.textContent="Création du job…";bar.style.width="2%";const data=await api("/api/sync/transfer",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:source.value,destination:destination.value,playlist_id:playlist.value,destination_name:$("#name").value.trim()||null,max_tracks:500})});poll(data.job_id)}catch(e){state.textContent=e.message;transfer.disabled=false}};
+
+async function poll(id){try{const j=await api(`/api/sync/jobs/${id}`);bar.style.width=`${j.progress||0}%`;state.textContent=`${j.stage||j.status} · ${j.progress||0}%`;$("#total").textContent=j.total||0;$("#matched").textContent=j.matched||0;$("#unmatched").textContent=j.unmatched||0;if(j.status==="ready"){renderReport(j.report||[]);transfer.disabled=false;return}if(j.status==="error"){state.textContent=j.error||j.message||"Erreur";transfer.disabled=false;return}setTimeout(()=>poll(id),900)}catch(e){state.textContent=e.message;transfer.disabled=false}}
+
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function renderReport(rows){report.style.display="block";report.innerHTML=rows.map((r,i)=>`<div class="row"><div>${i+1}</div><div><b>${esc(r.source?.title)}</b><div class="hint">${esc(r.source?.artist)} → <span class="${r.matched?"ok":"bad"}">${r.matched?esc(r.destination?.title):"Introuvable"}</span></div></div><div class="score">${Math.round((r.score||0)*100)}%</div></div>`).join("");state.textContent="Transfert terminé"}
+loadProviders();
+</script>
+</body>
+</html>
