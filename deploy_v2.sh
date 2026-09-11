@@ -5,11 +5,24 @@ PROJECT_ID="${PROJECT_ID:-project-017b13a1-e57e-4723-a2b}"
 REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-dingo-dl}"
 
+# Last-mile hardening before verification/deploy.
+python3 - <<'PY'
+from pathlib import Path
+p = Path('sync_ui.html')
+s = p.read_text(encoding='utf-8')
+old = 'const canResolve=!r.matched&&currentJob&&currentJobData?.destination_playlist_id;'
+new = 'const canResolve=!r.matched&&currentJob&&currentJobData?.destination_playlist_id&&currentJobData?.destination==="youtube";'
+if old in s:
+    s = s.replace(old, new, 1)
+p.write_text(s, encoding='utf-8')
+PY
+
 printf '\n=== DINGO SYNC V2 · LOCAL VERIFY x5 ===\n'
 for i in 1 2 3 4 5; do
   printf 'Local check %s/5... ' "$i"
   python3 -m compileall -q .
   python3 verify_v2.py >/tmp/dingo-v2-verify.json
+  grep -q 'currentJobData?.destination==="youtube"' sync_ui.html
   echo OK
 done
 
@@ -33,6 +46,7 @@ for i in 1 2 3 4 5; do
   [ "$code" = "200" ]
   grep -q 'Dingo-dl Sync V2' /tmp/dingo-sync.html
   grep -q 'IMPORT FICHIER / TEXTE' /tmp/dingo-sync.html
+  grep -q 'currentJobData?.destination==="youtube"' /tmp/dingo-sync.html
 
   curl -fsS "$URL/api/sync/providers" > /tmp/dingo-providers.json
   curl -fsS "$URL/api/sync/storage" > /tmp/dingo-storage.json
