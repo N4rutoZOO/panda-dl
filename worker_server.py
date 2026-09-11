@@ -68,6 +68,39 @@ def _youtube(url):
     return host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"} or host.endswith(".youtube.com")
 
 
+def _instagram(url):
+    host = _host(url)
+    return host in {"instagram.com", "www.instagram.com", "m.instagram.com"} or host.endswith(".instagram.com")
+
+
+def _auth_required_error(text):
+    low = str(text or "").lower()
+    markers = (
+        "only available for registered users",
+        "registered users who follow this account",
+        "login required",
+        "authentication required",
+        "sign in to confirm",
+        "please login",
+        "please log in",
+        "cookies are required",
+        "use --cookies-from-browser",
+        "use --cookies for the authentication",
+    )
+    return any(marker in low for marker in markers)
+
+
+def _friendly_error(url, text):
+    raw = str(text or "").strip()
+    if _instagram(url) and _auth_required_error(raw):
+        return (
+            "Instagram demande une session connectée dans le profil Chromium du worker. "
+            "Connecte ton propre compte Instagram dans Chromium sur panda-youtube-worker. "
+            "Pour un compte privé, ce compte Instagram doit déjà suivre le profil concerné."
+        )
+    return raw or "Téléchargement impossible"
+
+
 def _playlist_id(url):
     try:
         return (parse_qs(urlparse(url).query).get("list") or [None])[0]
@@ -90,8 +123,8 @@ def _deno_flags():
 
 def _browser_flags(url):
     flags = []
-    # The persistent Chromium profile is user-owned. It is especially needed for YouTube,
-    # and can also provide cookies for other services the owner has explicitly logged into.
+    # Reuse the user's persistent Chromium session for every supported service.
+    # This does not grant access the account does not already have.
     if os.path.isdir(PROFILE):
         flags += ["--cookies-from-browser", f"chromium:{PROFILE}"]
     if _youtube(url):
@@ -183,7 +216,7 @@ def _run_gallery(job_id, url, workdir):
         "--filename", "{num:03}_{filename}.{extension}",
         url,
     ]
-    _update(job_id, stage="downloading", progress=15, message="gallery-dl · téléchargement des images")
+    _update(job_id, stage="downloading", progress=15, message="gallery-dl · téléchargement des médias")
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     tail = []
     while True:
@@ -199,13 +232,14 @@ def _run_gallery(job_id, url, workdir):
             tail.append(line.rstrip())
             tail = tail[-100:]
             count = len([p for p in _walk_payload(workdir) if not p.endswith((".json", ".zip"))])
-            _update(job_id, progress=min(84, 15 + count * 4), message=f"Images récupérées · {count}")
+            _update(job_id, progress=min(84, 15 + count * 4), message=f"Médias récupérés · {count}")
         if proc.poll() is not None:
             break
         if not line:
             time.sleep(0.05)
     if proc.returncode != 0:
-        raise RuntimeError("\n".join(tail[-60:])[-6000:] or "gallery-dl a échoué")
+        raw = "\n".join(tail[-60:])[-6000:] or "gallery-dl a échoué"
+        raise RuntimeError(_friendly_error(url, raw))
 
 
 def _run_ytdlp(job_id, payload, url, workdir):
@@ -298,7 +332,14 @@ def _run_ytdlp(job_id, payload, url, workdir):
         if not line:
             time.sleep(0.05)
     if proc.returncode != 0:
-        raise RuntimeError("\n".join(tail[-60:])[-6000:] or "yt-dlp a échoué")
+        raw = "\n".join(tail[-60:])[-6000:] or "yt-dlp a échoué"
+        # Instagram is often more reliable through gallery-dl. Reuse the same Chromium
+        # cookies and try it automatically before returning an authentication error.
+        if _instagram(url) and _auth_required_error(raw):
+            _update(job_id, stage="auth_retry", progress=8, message="Instagram · nouvelle tentative via gallery-dl")
+            _run_gallery(job_id, url, workdir)
+            return
+        raise RuntimeError(_friendly_error(url, raw))
 
 
 def _run_job(job_id, payload):
@@ -330,7 +371,7 @@ def _run_job(job_id, payload):
         shutil.rmtree(workdir, ignore_errors=True)
         _update(job_id, status="cancelled", stage="cancelled", progress=0, message="Job annulé", workdir=None, bundle=None)
     except Exception as exc:
-        message = str(exc)[-5000:]
+        message = _friendly_error(payload.get("url"), str(exc)[-5000:])
         shutil.rmtree(workdir, ignore_errors=True)
         _update(job_id, status="error", stage="error", progress=0, message=message, error=message, workdir=None, bundle=None)
 
@@ -345,6 +386,7 @@ def health():
         "token_configured": bool(TOKEN),
         "yt_dlp": os.path.isfile(YTDLP),
         "gallery_dl": os.path.isfile(GALLERYDL),
+        "browser_cookies_enabled": os.path.isdir(PROFILE),
         "deno": bool(_deno_flags()),
         "ffmpeg": shutil.which("ffmpeg") is not None,
         "playlist_limit": PLAYLIST_LIMIT,
@@ -380,7 +422,21 @@ async def info(request: Request, authorization: str | None = Header(default=None
     cmd.append(url)
     proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=180, check=False)
     if proc.returncode != 0:
-        raise HTTPException(status_code=502, detail=(proc.stderr or proc.stdout or "Analyse impossible")[-5000:])
+        raw = (proc.stderr or proc.stdout or "Analyse impossible")[-5000:]
+        # For Instagram, the download path can fall back to gallery-dl. Keep analysis usable
+        # instead of exposing the raw yt-dlp cookie error.
+        if _instagram(url) and _auth_required_error(raw):
+            return {
+                "title": urlparse(url).path.rstrip("/").split("/")[-1] or "Instagram",
+                "uploader": "Instagram",
+                "thumbnail": None,
+                "duration": None,
+                "formats": [],
+                "entries": [],
+                "extractor": "instagram-authenticated",
+                "auth_required": True,
+            }
+        raise HTTPException(status_code=502, detail=_friendly_error(url, raw))
     try:
         data = json.loads(proc.stdout)
     except Exception:
