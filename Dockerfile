@@ -11,11 +11,7 @@ COPY . .
 
 ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
-ENV PANDA_JOB_TTL=7200
-ENV PANDA_JOB_WORKERS=2
-ENV PANDA_YT_WORKER_POLL=0.5
-ENV PANDA_INFO_TTL=300
-ENV PANDA_AUTH_REQUIRED=1
-ENV PANDA_COOKIE_SECURE=1
+ENV DINGO_INFO_TTL=300
+ENV DINGO_PLAYLIST_LIMIT=100
 
-CMD ["sh","-c","python -m uvicorn app_max:app --host 0.0.0.0 --port ${PORT} --loop uvloop --http httptools"]
+CMD ["sh","-c","python -m uvicorn dingo_app:app --host 0.0.0.0 --port ${PORT} --loop uvloop --http httptools"]
