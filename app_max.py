@@ -4,7 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi.responses import HTMLResponse
 
 import app_full as core
-from playlist_sync import router as sync_router
+import playlist_sync as playlist_sync_core
+from sync_persistence import install as install_sync_persistence
 
 # PANDA/Dingo MAX runtime: keep a single Cloud Run process (jobs live in memory),
 # but allow a small bounded pool of heavy jobs inside that process.
@@ -17,10 +18,14 @@ except Exception:
 
 core.EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="panda-dl-max")
 core.WORKER_POLL = max(0.4, min(float(os.getenv("PANDA_YT_WORKER_POLL", "0.5")), 5.0))
-core.VERSION = "3.1-sync"
+core.VERSION = "3.2-sync-firestore"
+
+sync_storage_router = install_sync_persistence(playlist_sync_core)
+sync_router = playlist_sync_core.router
 
 app = core.app
 app.include_router(sync_router)
+app.include_router(sync_storage_router)
 
 
 @app.get("/sync", response_class=HTMLResponse)
