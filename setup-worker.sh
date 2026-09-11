@@ -23,33 +23,25 @@ if ! gcloud compute instances describe "$INSTANCE" --zone "$ZONE" >/dev/null 2>&
   exit 1
 fi
 
-# Ensure the worker VM is running.
+# Keep the expected network tag even after machine-type changes/restarts.
+gcloud compute instances add-tags "$INSTANCE" --zone "$ZONE" --tags=panda-youtube-worker --quiet >/dev/null 2>&1 || true
+
 STATUS="$(gcloud compute instances describe "$INSTANCE" --zone "$ZONE" --format='value(status)')"
 if [[ "$STATUS" != "RUNNING" ]]; then
   echo "Démarrage de la VM $INSTANCE..."
   gcloud compute instances start "$INSTANCE" --zone "$ZONE" --quiet >/dev/null
 fi
 
-# The VM has no public IP. Cloud Shell therefore uses IAP for SSH/SCP.
-# Make sure IAP can reach tcp/22 on the worker tag before attempting copies.
+# No public IP is required. Cloud Shell reaches SSH through IAP.
 if gcloud compute firewall-rules describe panda-worker-iap-ssh >/dev/null 2>&1; then
   gcloud compute firewall-rules update panda-worker-iap-ssh \
-    --allow=tcp:22 \
-    --source-ranges="$IAP_RANGE" \
-    --target-tags=panda-youtube-worker \
-    --quiet >/dev/null
+    --allow=tcp:22 --source-ranges="$IAP_RANGE" --target-tags=panda-youtube-worker --quiet >/dev/null
 else
   gcloud compute firewall-rules create panda-worker-iap-ssh \
-    --network=default \
-    --direction=INGRESS \
-    --action=ALLOW \
-    --rules=tcp:22 \
-    --source-ranges="$IAP_RANGE" \
-    --target-tags=panda-youtube-worker \
-    --quiet >/dev/null
+    --network=default --direction=INGRESS --action=ALLOW --rules=tcp:22 \
+    --source-ranges="$IAP_RANGE" --target-tags=panda-youtube-worker --quiet >/dev/null
 fi
 
-# Wait until the guest SSH daemon is reachable through IAP.
 echo "Attente SSH/IAP..."
 SSH_OK=0
 for n in $(seq 1 18); do
@@ -62,7 +54,6 @@ done
 if [[ "$SSH_OK" != "1" ]]; then
   cat /tmp/panda-ssh-check.log || true
   echo "ERREUR: impossible de joindre la VM par SSH/IAP après 90 s."
-  echo "Vérifie que la VM est RUNNING et que le tag panda-youtube-worker est présent."
   exit 1
 fi
 
@@ -129,9 +120,7 @@ fi
 sudo mkdir -p /opt/panda-dl-worker
 sudo mv /tmp/worker_server.py /opt/panda-dl-worker/worker_server.py
 sudo chown -R $WORKER_USER:$WORKER_USER /opt/panda-dl-worker
-if [[ ! -x /opt/panda-dl-worker/venv/bin/python ]]; then
-  python3 -m venv /opt/panda-dl-worker/venv
-fi
+if [[ ! -x /opt/panda-dl-worker/venv/bin/python ]]; then python3 -m venv /opt/panda-dl-worker/venv; fi
 /opt/panda-dl-worker/venv/bin/pip install -q --upgrade pip
 /opt/panda-dl-worker/venv/bin/pip install -q --upgrade 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.32,<1' 'yt-dlp[default]>=2026.07.04,<2027' 'gallery-dl>=1.30,<2'
 sudo mv /tmp/panda-dl-worker.env /etc/panda-dl-worker.env
