@@ -13,7 +13,7 @@ FRAGMENTS="${PANDA_WORKER_FRAGMENTS:-4}"
 IAP_RANGE="35.235.240.0/20"
 
 cd "$(dirname "$0")"
-python3 -m py_compile worker_server.py
+python3 -m py_compile worker_server.py worker_server_resilient.py
 
 gcloud config set project "$PROJECT_ID" >/dev/null
 gcloud services enable compute.googleapis.com secretmanager.googleapis.com iap.googleapis.com >/dev/null
@@ -77,6 +77,7 @@ PANDA_WORKER_JOB_TTL=7200
 PANDA_WORKER_JOBS=$WORKER_JOBS
 PANDA_WORKER_FRAGMENTS=$FRAGMENTS
 PANDA_YTDLP_BIN=/opt/panda-dl-worker/venv/bin/yt-dlp
+PANDA_YOUTUBEDL_BIN=/opt/panda-dl-worker/venv/bin/youtube-dl
 PANDA_GALLERYDL_BIN=/opt/panda-dl-worker/venv/bin/gallery-dl
 PYTHONUNBUFFERED=1
 PATH=/opt/panda-dl-worker/venv/bin:/home/$WORKER_USER/.deno/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -84,7 +85,7 @@ EOF
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=PANDA DL media worker V6/MAX
+Description=PANDA DL media worker V6/MAX resilient
 After=network-online.target
 Wants=network-online.target
 
@@ -94,7 +95,7 @@ User=$WORKER_USER
 Group=$WORKER_USER
 WorkingDirectory=/opt/panda-dl-worker
 EnvironmentFile=/etc/panda-dl-worker.env
-ExecStart=/opt/panda-dl-worker/venv/bin/python -m uvicorn worker_server:app --host 0.0.0.0 --port $PORT --loop uvloop --http httptools
+ExecStart=/opt/panda-dl-worker/venv/bin/python -m uvicorn worker_server_resilient:app --host 0.0.0.0 --port $PORT --loop uvloop --http httptools
 Restart=always
 RestartSec=1
 TimeoutStopSec=15
@@ -104,8 +105,9 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
-echo "Installation PANDA DL worker V6/MAX..."
+echo "Installation PANDA DL worker V6/MAX RESILIENT..."
 gcloud compute scp worker_server.py "$INSTANCE:/tmp/worker_server.py" --zone "$ZONE" --tunnel-through-iap --quiet >/dev/null
+gcloud compute scp worker_server_resilient.py "$INSTANCE:/tmp/worker_server_resilient.py" --zone "$ZONE" --tunnel-through-iap --quiet >/dev/null
 gcloud compute scp "$ENV_FILE" "$INSTANCE:/tmp/panda-dl-worker.env" --zone "$ZONE" --tunnel-through-iap --quiet >/dev/null
 gcloud compute scp "$SERVICE_FILE" "$INSTANCE:/tmp/panda-dl-worker.service" --zone "$ZONE" --tunnel-through-iap --quiet >/dev/null
 
@@ -119,10 +121,12 @@ if [[ ! -x /home/$WORKER_USER/.deno/bin/deno ]]; then
 fi
 sudo mkdir -p /opt/panda-dl-worker
 sudo mv /tmp/worker_server.py /opt/panda-dl-worker/worker_server.py
+sudo mv /tmp/worker_server_resilient.py /opt/panda-dl-worker/worker_server_resilient.py
 sudo chown -R $WORKER_USER:$WORKER_USER /opt/panda-dl-worker
 if [[ ! -x /opt/panda-dl-worker/venv/bin/python ]]; then python3 -m venv /opt/panda-dl-worker/venv; fi
 /opt/panda-dl-worker/venv/bin/pip install -q --upgrade pip
 /opt/panda-dl-worker/venv/bin/pip install -q --upgrade 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.32,<1' 'yt-dlp[default]>=2026.07.04,<2027' 'gallery-dl>=1.30,<2'
+/opt/panda-dl-worker/venv/bin/pip install -q --upgrade 'youtube-dl @ https://github.com/ytdl-org/youtube-dl/archive/refs/heads/master.zip'
 sudo mv /tmp/panda-dl-worker.env /etc/panda-dl-worker.env
 sudo mv /tmp/panda-dl-worker.service /etc/systemd/system/panda-dl-worker.service
 sudo chown root:root /etc/panda-dl-worker.env /etc/systemd/system/panda-dl-worker.service
@@ -148,11 +152,12 @@ fi
 IP="$(gcloud compute instances describe "$INSTANCE" --zone "$ZONE" --format='value(networkInterfaces[0].networkIP)')"
 echo
 echo "===================================="
-echo "PANDA DL WORKER V6/MAX READY"
+echo "PANDA DL WORKER V6/MAX RESILIENT READY"
 echo "VM: $INSTANCE"
 echo "Internal: http://$IP:$PORT"
 echo "Secret: $SECRET"
 echo "Profile: /home/$WORKER_USER/chrome-profile"
 echo "Jobs: $WORKER_JOBS · Fragments: $FRAGMENTS"
-echo "Engines: yt-dlp + gallery-dl + ffmpeg + Deno"
+echo "YouTube chain: yt-dlp(session) -> yt-dlp(public) -> youtube-dl(public)"
+echo "Other engines: gallery-dl + ffmpeg + Deno"
 echo "===================================="
