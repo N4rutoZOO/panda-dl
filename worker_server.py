@@ -1,6 +1,8 @@
+import ipaddress
 import json
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import threading
@@ -24,20 +26,46 @@ WORKERS = max(1, min(int(os.getenv("PANDA_WORKER_JOBS", "1")), 2))
 FRAGMENTS = max(1, min(int(os.getenv("PANDA_WORKER_FRAGMENTS", "2")), 4))
 
 YTDLP = os.getenv("PANDA_YTDLP_BIN", "/opt/panda-dl-worker/venv/bin/yt-dlp")
+GALLERYDL = os.getenv("PANDA_GALLERYDL_BIN", "/opt/panda-dl-worker/venv/bin/gallery-dl")
 
 JOBS = {}
 LOCK = threading.Lock()
 EXECUTOR = ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="panda-dl-worker")
 
 
-def _youtube_url(value):
+def _auth(authorization):
+    if not TOKEN:
+        raise HTTPException(status_code=503, detail="Worker token non configuré")
+    if authorization != f"Bearer {TOKEN}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _public_url(value):
     value = str(value or "").strip()
     parsed = urlparse(value)
-    host = (parsed.hostname or "").lower().rstrip(".")
-    allowed = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
-    if parsed.scheme not in {"http", "https"} or (host not in allowed and not host.endswith(".youtube.com")):
-        raise ValueError("URL YouTube invalide")
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("URL invalide")
+    host = parsed.hostname.lower().rstrip(".")
+    if host in {"localhost", "localhost.localdomain"}:
+        raise ValueError("Hôte non autorisé")
+    try:
+        addresses = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError("Domaine introuvable") from exc
+    for item in addresses:
+        ip = ipaddress.ip_address(item[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            raise ValueError("Adresse réseau privée interdite")
     return value
+
+
+def _host(url):
+    return (urlparse(url).hostname or "").lower().rstrip(".")
+
+
+def _youtube(url):
+    host = _host(url)
+    return host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"} or host.endswith(".youtube.com")
 
 
 def _playlist_id(url):
@@ -52,35 +80,36 @@ def _playlist_url(url):
     return f"https://www.youtube.com/playlist?list={pid}" if pid else url
 
 
-def _auth(authorization):
-    if not TOKEN:
-        raise HTTPException(status_code=503, detail="Worker token non configuré")
-    if authorization != f"Bearer {TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-
 def _deno_flags():
-    candidates = [
-        shutil.which("deno"),
-        "/home/gbeerus489/.deno/bin/deno",
-        "/usr/local/bin/deno",
-    ]
+    candidates = [shutil.which("deno"), "/home/gbeerus489/.deno/bin/deno", "/usr/local/bin/deno"]
     for path in candidates:
         if path and os.path.isfile(path) and os.access(path, os.X_OK):
             return ["--js-runtimes", f"deno:{path}"]
     return []
 
 
-def _browser_flags():
-    return [
-        "--cookies-from-browser", f"chromium:{PROFILE}",
-        *_deno_flags(),
+def _browser_flags(url):
+    flags = []
+    # The persistent Chromium profile is user-owned. It is especially needed for YouTube,
+    # and can also provide cookies for other services the owner has explicitly logged into.
+    if os.path.isdir(PROFILE):
+        flags += ["--cookies-from-browser", f"chromium:{PROFILE}"]
+    if _youtube(url):
+        flags += _deno_flags()
+    flags += [
         "--retries", "10",
         "--fragment-retries", "10",
         "--extractor-retries", "3",
         "--socket-timeout", "20",
         "--concurrent-fragments", str(FRAGMENTS),
     ]
+    return flags
+
+
+def _gallery_cookie_flags():
+    if os.path.isdir(PROFILE):
+        return ["--cookies-from-browser", f"chromium:{PROFILE}"]
+    return []
 
 
 def _update(job_id, **values):
@@ -134,116 +163,159 @@ def _selector(quality):
     return f"bv*[height<={height}]+ba/b[height<={height}]"
 
 
+def _walk_payload(root):
+    files = []
+    for base, _, names in os.walk(root):
+        for name in names:
+            path = os.path.join(base, name)
+            if name.endswith((".part", ".ytdl", ".tmp")):
+                continue
+            if os.path.isfile(path) and os.path.getsize(path) > 0:
+                files.append(path)
+    return files
+
+
+def _run_gallery(job_id, url, workdir):
+    cmd = [
+        GALLERYDL,
+        *_gallery_cookie_flags(),
+        "--directory", workdir,
+        "--filename", "{num:03}_{filename}.{extension}",
+        url,
+    ]
+    _update(job_id, stage="downloading", progress=15, message="gallery-dl · téléchargement des images")
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+    tail = []
+    while True:
+        if _cancelled(job_id):
+            proc.terminate()
+            try:
+                proc.wait(timeout=4)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            raise InterruptedError("Job annulé")
+        line = proc.stdout.readline() if proc.stdout else ""
+        if line:
+            tail.append(line.rstrip())
+            tail = tail[-100:]
+            count = len([p for p in _walk_payload(workdir) if not p.endswith((".json", ".zip"))])
+            _update(job_id, progress=min(84, 15 + count * 4), message=f"Images récupérées · {count}")
+        if proc.poll() is not None:
+            break
+        if not line:
+            time.sleep(0.05)
+    if proc.returncode != 0:
+        raise RuntimeError("\n".join(tail[-60:])[-6000:] or "gallery-dl a échoué")
+
+
+def _run_ytdlp(job_id, payload, url, workdir):
+    mode = "audio" if payload.get("mode") == "audio" else "video"
+    quality = str(payload.get("quality") or "best")
+    playlist_mode = bool(payload.get("playlist_mode"))
+    selected = payload.get("selected_playlist") or []
+
+    cmd = [
+        YTDLP,
+        *_browser_flags(url),
+        "--newline",
+        "--progress",
+        "--embed-metadata",
+        "--write-info-json",
+        "--windows-filenames",
+        "--trim-filenames", "140",
+        "--progress-template",
+        "download:PDL|%(info.playlist_index)s|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
+    ]
+
+    if playlist_mode:
+        one_based = sorted({int(x) + 1 for x in selected if 0 <= int(x) < PLAYLIST_LIMIT})
+        if not one_based:
+            raise RuntimeError("Aucune vidéo sélectionnée")
+        if _youtube(url):
+            url = _playlist_url(url)
+        cmd += [
+            "--yes-playlist",
+            "--playlist-items", ",".join(str(x) for x in one_based),
+            "--playlist-end", str(PLAYLIST_LIMIT),
+            "-o", os.path.join(workdir, "%(playlist_index)03d - %(title)s.%(ext)s"),
+        ]
+        position_map = {idx: pos for pos, idx in enumerate(one_based, 1)}
+        total_items = len(one_based)
+    else:
+        cmd += ["--no-playlist", "-o", os.path.join(workdir, "%(id)s.%(ext)s")]
+        position_map = {}
+        total_items = 1
+
+    if mode == "audio":
+        cmd += ["-f", "bestaudio/best"]
+    else:
+        cmd += ["-f", _selector(quality), "--merge-output-format", "mp4"]
+    cmd.append(url)
+
+    _update(job_id, stage="downloading", progress=5, message="yt-dlp · téléchargement")
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1)
+    tail = []
+    while True:
+        if _cancelled(job_id):
+            proc.terminate()
+            try:
+                proc.wait(timeout=4)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            raise InterruptedError("Job annulé")
+        line = proc.stdout.readline() if proc.stdout else ""
+        if line:
+            line = line.rstrip()
+            tail.append(line)
+            tail = tail[-120:]
+            if line.startswith("PDL|"):
+                parts = line.split("|", 4)
+                raw_index = parts[1] if len(parts) > 1 else ""
+                pct = _progress(parts[2] if len(parts) > 2 else "0")
+                speed = (parts[3] if len(parts) > 3 else "").strip()
+                eta = (parts[4] if len(parts) > 4 else "").strip()
+                if playlist_mode:
+                    try:
+                        position = position_map.get(int(raw_index), 1)
+                    except Exception:
+                        position = 1
+                    overall = ((position - 1) + pct / 100.0) / max(1, total_items)
+                    message = f"Vidéo {position}/{total_items} · {pct:.0f}%"
+                else:
+                    overall = pct / 100.0
+                    message = f"Téléchargement {pct:.0f}%"
+                if speed and speed not in {"N/A", "Unknown"}:
+                    message += f" · {speed}"
+                if eta and eta not in {"N/A", "Unknown"}:
+                    message += f" · ETA {eta}"
+                _update(job_id, stage="downloading", progress=5 + int(overall * 80), message=message)
+        if proc.poll() is not None:
+            if proc.stdout:
+                rest = proc.stdout.read()
+                if rest:
+                    tail.extend(rest.splitlines()[-50:])
+            break
+        if not line:
+            time.sleep(0.05)
+    if proc.returncode != 0:
+        raise RuntimeError("\n".join(tail[-60:])[-6000:] or "yt-dlp a échoué")
+
+
 def _run_job(job_id, payload):
     workdir = tempfile.mkdtemp(prefix=f"panda_dl_worker_{job_id[:8]}_")
-    _update(job_id, status="running", stage="preparing", progress=2, message="Préparation yt-dlp", workdir=workdir)
-    proc = None
+    _update(job_id, status="running", stage="preparing", progress=2, message="Préparation", workdir=workdir)
     try:
-        url = _youtube_url(payload.get("url"))
-        mode = "audio" if payload.get("mode") == "audio" else "video"
-        quality = str(payload.get("quality") or "best")
-        playlist_mode = bool(payload.get("playlist_mode"))
-        selected = payload.get("selected_playlist") or []
-
-        cmd = [
-            YTDLP,
-            *_browser_flags(),
-            "--newline",
-            "--progress",
-            "--embed-metadata",
-            "--write-info-json",
-            "--windows-filenames",
-            "--trim-filenames", "140",
-            "--progress-template",
-            "download:PDL|%(info.playlist_index)s|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
-        ]
-
-        if playlist_mode:
-            one_based = sorted({int(x) + 1 for x in selected if 0 <= int(x) < PLAYLIST_LIMIT})
-            if not one_based:
-                raise RuntimeError("Aucune vidéo sélectionnée")
-            url = _playlist_url(url)
-            cmd += [
-                "--yes-playlist",
-                "--playlist-items", ",".join(str(x) for x in one_based),
-                "--playlist-end", str(PLAYLIST_LIMIT),
-                "-o", os.path.join(workdir, "%(playlist_index)03d - %(title)s.%(ext)s"),
-            ]
-            position_map = {idx: pos for pos, idx in enumerate(one_based, 1)}
-            total_items = len(one_based)
+        url = _public_url(payload.get("url"))
+        mode = str(payload.get("mode") or "video")
+        if mode == "image":
+            _run_gallery(job_id, url, workdir)
         else:
-            cmd += ["--no-playlist", "-o", os.path.join(workdir, "%(id)s.%(ext)s")]
-            position_map = {}
-            total_items = 1
+            _run_ytdlp(job_id, payload, url, workdir)
 
-        if mode == "audio":
-            cmd += ["-f", "bestaudio/best"]
-        else:
-            cmd += ["-f", _selector(quality), "--merge-output-format", "mp4"]
-
-        cmd.append(url)
-        _update(job_id, stage="downloading", progress=5, message="Session Chromium · yt-dlp")
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1)
-        tail = []
-        while True:
-            if _cancelled(job_id):
-                proc.terminate()
-                try:
-                    proc.wait(timeout=4)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                raise InterruptedError("Job annulé")
-
-            line = proc.stdout.readline() if proc.stdout else ""
-            if line:
-                line = line.rstrip()
-                tail.append(line)
-                if len(tail) > 120:
-                    tail = tail[-120:]
-                if line.startswith("PDL|"):
-                    parts = line.split("|", 4)
-                    raw_index = parts[1] if len(parts) > 1 else ""
-                    pct = _progress(parts[2] if len(parts) > 2 else "0")
-                    speed = (parts[3] if len(parts) > 3 else "").strip()
-                    eta = (parts[4] if len(parts) > 4 else "").strip()
-                    if playlist_mode:
-                        try:
-                            position = position_map.get(int(raw_index), 1)
-                        except Exception:
-                            position = 1
-                        overall = ((position - 1) + pct / 100.0) / max(1, total_items)
-                        message = f"Vidéo {position}/{total_items} · {pct:.0f}%"
-                    else:
-                        overall = pct / 100.0
-                        message = f"Téléchargement {pct:.0f}%"
-                    if speed and speed not in {"N/A", "Unknown"}:
-                        message += f" · {speed}"
-                    if eta and eta not in {"N/A", "Unknown"}:
-                        message += f" · ETA {eta}"
-                    _update(job_id, stage="downloading", progress=5 + int(overall * 80), message=message)
-
-            if proc.poll() is not None:
-                if proc.stdout:
-                    rest = proc.stdout.read()
-                    if rest:
-                        tail.extend(rest.splitlines()[-50:])
-                break
-            if not line:
-                time.sleep(0.05)
-
-        if proc.returncode != 0:
-            raise RuntimeError("\n".join(tail[-60:])[-6000:] or "yt-dlp a échoué")
-
-        candidates = []
-        for base, _, files in os.walk(workdir):
-            for name in files:
-                path = os.path.join(base, name)
-                if name.endswith((".part", ".ytdl")):
-                    continue
-                candidates.append(path)
+        candidates = _walk_payload(workdir)
         media = [p for p in candidates if not p.endswith((".json", ".zip"))]
         if not media:
-            raise RuntimeError("yt-dlp n'a généré aucun média")
+            raise RuntimeError("Aucun média généré")
 
         bundle = os.path.join(workdir, "bundle.zip")
         _update(job_id, stage="packaging", progress=90, message="Préparation du transfert")
@@ -253,7 +325,6 @@ def _run_job(job_id, payload):
                     continue
                 archive.write(path, arcname=os.path.relpath(path, workdir))
                 _update(job_id, stage="packaging", progress=90 + int((pos / max(1, len(candidates))) * 9), message=f"Bundle {pos}/{len(candidates)}")
-
         _update(job_id, status="ready", stage="ready", progress=100, message="Worker prêt", bundle=bundle, result_size=os.path.getsize(bundle))
     except InterruptedError:
         shutil.rmtree(workdir, ignore_errors=True)
@@ -262,9 +333,6 @@ def _run_job(job_id, payload):
         message = str(exc)[-5000:]
         shutil.rmtree(workdir, ignore_errors=True)
         _update(job_id, status="error", stage="error", progress=0, message=message, error=message, workdir=None, bundle=None)
-    finally:
-        if proc is not None and proc.poll() is None:
-            proc.kill()
 
 
 @app.get("/health")
@@ -276,6 +344,7 @@ def health():
         "profile_exists": os.path.isdir(PROFILE),
         "token_configured": bool(TOKEN),
         "yt_dlp": os.path.isfile(YTDLP),
+        "gallery_dl": os.path.isfile(GALLERYDL),
         "deno": bool(_deno_flags()),
         "ffmpeg": shutil.which("ffmpeg") is not None,
         "playlist_limit": PLAYLIST_LIMIT,
@@ -286,24 +355,38 @@ def health():
 async def info(request: Request, authorization: str | None = Header(default=None)):
     _auth(authorization)
     payload = await request.json()
-    url = _youtube_url(payload.get("url"))
+    url = _public_url(payload.get("url"))
     playlist_mode = bool(payload.get("playlist_mode"))
-    cmd = [YTDLP, *_browser_flags(), "--dump-single-json", "--skip-download", "--no-warnings"]
+    media_mode = str(payload.get("media_mode") or "video")
+
+    if media_mode == "image":
+        return {
+            "title": urlparse(url).path.rstrip("/").split("/")[-1] or _host(url),
+            "uploader": _host(url),
+            "thumbnail": None,
+            "duration": None,
+            "formats": [],
+            "entries": [],
+            "extractor": "gallery-dl",
+        }
+
+    cmd = [YTDLP, *_browser_flags(url), "--dump-single-json", "--skip-download", "--no-warnings"]
     if playlist_mode:
-        url = _playlist_url(url)
+        if _youtube(url):
+            url = _playlist_url(url)
         cmd += ["--flat-playlist", "--yes-playlist", "--playlist-end", str(PLAYLIST_LIMIT)]
     else:
         cmd += ["--no-playlist"]
     cmd.append(url)
     proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=180, check=False)
     if proc.returncode != 0:
-        raise HTTPException(status_code=502, detail=(proc.stderr or proc.stdout or "Analyse YouTube impossible")[-5000:])
+        raise HTTPException(status_code=502, detail=(proc.stderr or proc.stdout or "Analyse impossible")[-5000:])
     try:
         data = json.loads(proc.stdout)
     except Exception:
         raise HTTPException(status_code=502, detail="Réponse yt-dlp invalide")
     if playlist_mode and not (data.get("entries") or []):
-        raise HTTPException(status_code=502, detail="Aucune vidéo détectée dans cette playlist")
+        raise HTTPException(status_code=502, detail="Aucun élément détecté dans cette playlist")
     return data
 
 
@@ -313,7 +396,7 @@ async def create_job(request: Request, authorization: str | None = Header(defaul
     _cleanup()
     payload = await request.json()
     try:
-        payload["url"] = _youtube_url(payload.get("url"))
+        payload["url"] = _public_url(payload.get("url"))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     job_id = uuid.uuid4().hex
