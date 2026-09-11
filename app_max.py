@@ -7,8 +7,6 @@ import app_full as core
 import playlist_sync as playlist_sync_core
 from sync_persistence import install as install_sync_persistence
 
-# PANDA/Dingo MAX runtime: keep a single Cloud Run process (jobs live in memory),
-# but allow a small bounded pool of heavy jobs inside that process.
 JOB_WORKERS = max(1, min(int(os.getenv("PANDA_JOB_WORKERS", "2")), 4))
 
 try:
@@ -18,7 +16,7 @@ except Exception:
 
 core.EXECUTOR = ThreadPoolExecutor(max_workers=JOB_WORKERS, thread_name_prefix="panda-dl-max")
 core.WORKER_POLL = max(0.4, min(float(os.getenv("PANDA_YT_WORKER_POLL", "0.5")), 5.0))
-core.VERSION = "3.2-sync-firestore"
+core.VERSION = "4.0-sync-v2"
 
 sync_storage_router = install_sync_persistence(playlist_sync_core)
 sync_router = playlist_sync_core.router
