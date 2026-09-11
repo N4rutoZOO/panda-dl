@@ -13,5 +13,7 @@ ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 ENV PANDA_JOB_TTL=3600
 ENV PANDA_YT_WORKER_POLL=0.8
+ENV PANDA_AUTH_REQUIRED=1
+ENV PANDA_COOKIE_SECURE=1
 
-CMD ["sh","-c","python -m uvicorn app:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh","-c","python -m uvicorn app_full:app --host 0.0.0.0 --port ${PORT}"]
