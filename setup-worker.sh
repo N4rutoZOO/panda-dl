@@ -8,6 +8,8 @@ INSTANCE="${PANDA_WORKER_INSTANCE:-panda-youtube-worker}"
 WORKER_USER="${PANDA_WORKER_USER:-gbeerus489}"
 SECRET="${PANDA_WORKER_SECRET:-panda-dl-worker-token}"
 PORT="${PANDA_WORKER_PORT:-8865}"
+WORKER_JOBS="${PANDA_WORKER_JOBS:-2}"
+FRAGMENTS="${PANDA_WORKER_FRAGMENTS:-4}"
 
 cd "$(dirname "$0")"
 python3 -m py_compile worker_server.py
@@ -36,17 +38,18 @@ PANDA_WORKER_TOKEN=$TOKEN
 PANDA_CHROME_PROFILE=/home/$WORKER_USER/chrome-profile
 PANDA_WORKER_PORT=$PORT
 PANDA_PLAYLIST_LIMIT=100
-PANDA_WORKER_JOB_TTL=3600
-PANDA_WORKER_JOBS=1
-PANDA_WORKER_FRAGMENTS=2
+PANDA_WORKER_JOB_TTL=7200
+PANDA_WORKER_JOBS=$WORKER_JOBS
+PANDA_WORKER_FRAGMENTS=$FRAGMENTS
 PANDA_YTDLP_BIN=/opt/panda-dl-worker/venv/bin/yt-dlp
 PANDA_GALLERYDL_BIN=/opt/panda-dl-worker/venv/bin/gallery-dl
+PYTHONUNBUFFERED=1
 PATH=/opt/panda-dl-worker/venv/bin:/home/$WORKER_USER/.deno/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EOF
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=PANDA DL media worker
+Description=PANDA DL media worker MAX
 After=network-online.target
 Wants=network-online.target
 
@@ -56,16 +59,17 @@ User=$WORKER_USER
 Group=$WORKER_USER
 WorkingDirectory=/opt/panda-dl-worker
 EnvironmentFile=/etc/panda-dl-worker.env
-ExecStart=/opt/panda-dl-worker/venv/bin/python -m uvicorn worker_server:app --host 0.0.0.0 --port $PORT
+ExecStart=/opt/panda-dl-worker/venv/bin/python -m uvicorn worker_server:app --host 0.0.0.0 --port $PORT --loop uvloop --http httptools
 Restart=always
-RestartSec=3
+RestartSec=1
 TimeoutStopSec=15
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo "Installation PANDA DL worker..."
+echo "Installation PANDA DL worker MAX..."
 gcloud compute scp worker_server.py "$INSTANCE:/tmp/worker_server.py" --zone "$ZONE" >/dev/null
 gcloud compute scp "$ENV_FILE" "$INSTANCE:/tmp/panda-dl-worker.env" --zone "$ZONE" >/dev/null
 gcloud compute scp "$SERVICE_FILE" "$INSTANCE:/tmp/panda-dl-worker.service" --zone "$ZONE" >/dev/null
@@ -85,7 +89,7 @@ if [[ ! -x /opt/panda-dl-worker/venv/bin/python ]]; then
   python3 -m venv /opt/panda-dl-worker/venv
 fi
 /opt/panda-dl-worker/venv/bin/pip install -q --upgrade pip
-/opt/panda-dl-worker/venv/bin/pip install -q 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.32,<1' 'yt-dlp[default]>=2026.07.04,<2027' 'gallery-dl>=1.30,<2'
+/opt/panda-dl-worker/venv/bin/pip install -q --upgrade 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.32,<1' 'yt-dlp[default]>=2026.07.04,<2027' 'gallery-dl>=1.30,<2'
 sudo mv /tmp/panda-dl-worker.env /etc/panda-dl-worker.env
 sudo mv /tmp/panda-dl-worker.service /etc/systemd/system/panda-dl-worker.service
 sudo chown root:root /etc/panda-dl-worker.env /etc/systemd/system/panda-dl-worker.service
@@ -93,7 +97,7 @@ sudo chmod 600 /etc/panda-dl-worker.env
 sudo systemctl daemon-reload
 sudo systemctl enable --now panda-dl-worker
 sudo systemctl restart panda-dl-worker
-sleep 4
+sleep 3
 curl -fsS http://127.0.0.1:$PORT/health
 "
 
@@ -107,10 +111,11 @@ fi
 IP="$(gcloud compute instances describe "$INSTANCE" --zone "$ZONE" --format='value(networkInterfaces[0].networkIP)')"
 echo
 echo "===================================="
-echo "PANDA DL WORKER READY"
+echo "PANDA DL WORKER MAX READY"
 echo "VM: $INSTANCE"
 echo "Internal: http://$IP:$PORT"
 echo "Secret: $SECRET"
 echo "Profile: /home/$WORKER_USER/chrome-profile"
-echo "Engines: yt-dlp + gallery-dl + ffmpeg"
+echo "Jobs: $WORKER_JOBS · Fragments: $FRAGMENTS"
+echo "Engines: yt-dlp + gallery-dl + ffmpeg + Deno"
 echo "===================================="
