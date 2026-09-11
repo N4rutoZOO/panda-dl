@@ -96,4 +96,9 @@ echo "Google redirect URI:"
 echo "$GOOGLE_REDIRECT"
 echo
 echo "État des providers:"
-curl -fsS "$URL/api/sync/providers" | python3 -m json.tool || true
+STATUS="$(curl -fsS "$URL/api/sync/providers" || true)"
+if [[ -n "$STATUS" ]]; then
+  printf '%s\n' "$STATUS" | python3 -m json.tool || printf '%s\n' "$STATUS"
+else
+  echo "⚠️ Impossible de lire /api/sync/providers. Vérifie les logs Cloud Run."
+fi
