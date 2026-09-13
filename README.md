@@ -1,57 +1,48 @@
-# PANDA DL
+# Dingo-dl
 
-Nouveau projet séparé de `panda-download`.
+Dingo-dl combines the existing download/conversion engine with a playlist transfer/sync layer.
 
-## Interface
+## Downloader
 
-Direction artistique inspirée d'un plug-in audio premium :
+Existing yt-dlp / gallery-dl / FFmpeg features remain available on `/`.
 
-- bandeau supérieur bleu nuit ;
-- 4 modules néon `MODE / QUALITY / FORMAT / STATUS` ;
-- spectrogramme central ;
-- commandes type transport ;
-- console inférieure blanc/aluminium ;
-- gros potentiomètres et VU-mètres ;
-- responsive desktop + mobile.
+## Playlist Sync
 
-## Fonctions
+The sync UI is available on `/sync` and currently supports Spotify ↔ YouTube playlist transfer with OAuth, matching and transfer reports.
 
-- YouTube uniquement ;
-- VIDEO -> MP4 uniquement ;
-- AUDIO -> MP3 uniquement ;
-- vidéo : BEST / 2160p / 1440p / 1080p / 720p / 480p / 360p ;
-- audio : 320 / 256 / 192 / 128 kbps ;
-- métadonnées intégrées ;
-- progression en direct ;
-- téléchargement final depuis la même interface.
+### OAuth bootstrap
 
-## yt-dlp
-
-La session Chromium n'existe pas dans Cloud Shell. Elle existe sur la VM `panda-youtube-worker`. C'est donc cette VM qui exécute yt-dlp avec le profil connecté :
+After the Cloud Run service is deployed, run:
 
 ```bash
-yt-dlp \
-  --cookies-from-browser "chromium:$HOME/chrome-profile" \
-  -f "bv*+ba/b" \
-  --merge-output-format mp4 \
-  --embed-metadata \
-  -o "$HOME/Downloads/%(title)s.%(ext)s" \
-  "https://www.youtube.com/watch?v=fwLMySFVEAA"
+chmod +x configure-oauth.sh && ./configure-oauth.sh
 ```
 
-PANDA DL ne cherche jamais les cookies Chromium dans Cloud Shell. Le site appelle le worker privé déjà authentifié.
+The script:
+- detects the deployed `dingo-dl` Cloud Run URL;
+- enables the YouTube Data API and required GCP services;
+- prints the exact Spotify and Google OAuth redirect URIs;
+- prompts for Client IDs and Client Secrets;
+- stores Client Secrets in Google Secret Manager;
+- injects only Client IDs and the public URL as normal Cloud Run environment variables;
+- grants the Cloud Run service account access to the OAuth secrets;
+- updates the running service and prints `/api/sync/providers` status.
 
-## Déploiement
+Never commit real OAuth secrets or cookie/session files.
 
-Depuis Cloud Shell :
+### Redirect URIs
 
-```bash
-git clone https://github.com/N4rutoZOO/panda-dl.git
-cd panda-dl
-chmod +x deploy.sh
-./deploy.sh
+They are generated from the active Cloud Run URL:
+
+```text
+https://<cloud-run-host>/api/sync/oauth/spotify/callback
+https://<cloud-run-host>/api/sync/oauth/youtube/callback
 ```
 
-Le service Cloud Run s'appelle `panda-dl`, donc il reçoit une nouvelle adresse `run.app`, distincte de l'ancien site.
+The registered URI must exactly match the URI used by the application.
 
-Le projet GCP reste volontairement `project-017b13a1-e57e-4723-a2b` par défaut afin de réutiliser le worker privé existant sans réauthentifier Google. Le code et le repo sont entièrement séparés. Un nouveau projet GCP pourra être créé ensuite en migrant le worker/VPC.
+### Secure persistence
+
+When configured, Dingo Sync can use Firestore for connection persistence, transfer history and matching cache. OAuth tokens are encrypted before Firestore storage using `DINGO_TOKEN_KEY`, which should also come from Secret Manager.
+
+See `.env.sync.example` for the environment variable names.

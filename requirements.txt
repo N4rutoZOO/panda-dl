@@ -4,5 +4,7 @@ python-multipart>=0.0.20
 yt-dlp>=2026.8.19
 gallery-dl>=1.30
 google-auth>=2.35,<3
+google-cloud-firestore>=2.20,<3
+cryptography>=44,<46
 requests>=2.32,<3
 itsdangerous>=2.2,<3
